@@ -11,4 +11,4 @@ The feature extractor can be chosen from store.py.
 MAML.py and Reptile.py can be used to train, validate and test the MAML and Reptile model on time series data.
 The model can be chosen from store_1.py.
 
-All the dataset used in the experiment can be found in Data.zip.
+All the datasets used in the experiment can be found in Data.zip.
