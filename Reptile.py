@@ -14,6 +14,7 @@ from store_1 import CNN
 from torch import nn, optim
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 import torch
 from torch.utils.data import TensorDataset
 import torch
@@ -68,22 +69,22 @@ def fast_adapt(batch, learner, adapt_opt, loss, adaptation_steps, shots,query_nu
 
 def main(
         ways=2,
-        train_shots=5,
-        test_shots=5,
+        train_shots=6,
+        test_shots=6,
         query_num=5,
-        meta_lr=1.0,
+        meta_lr=0.01,
         meta_lr_final=1.0,
-        meta_bsz=5,
-        fast_lr=0.001,
+        meta_bsz=16,
+        fast_lr=0.01,
         train_bsz=10,
         test_bsz=15,
         train_steps=8,
         test_steps=50,
-        iterations=1001,
-        test_interval=100,
+        iterations=60,
+        test_interval=1,
         save='',
-        cuda=1,
-        seed=38,
+        cuda=0,
+        seed=48,
 ):
     cuda = bool(cuda)
     random.seed(seed)
@@ -94,42 +95,93 @@ def main(
         torch.cuda.manual_seed(seed)
         device = torch.device('cuda')
 
-    train_tasks, valid_tasks, test_tasks = l2l.vision.benchmarks.get_tasksets(
-        'mini-imagenet',
-        train_samples=2*train_shots,
-        train_ways=ways,
-        test_samples=2*test_shots,
-        test_ways=ways,
-        root='~/data',
-    )
+    # train_tasks, valid_tasks, test_tasks = l2l.vision.benchmarks.get_tasksets(
+    #     'mini-imagenet',
+    #     train_samples=2*train_shots,
+    #     train_ways=ways,
+    #     test_samples=2*test_shots,
+    #     test_ways=ways,
+    #     root='~/data',
+    # )
 
-    # load the dataset
-    train_data_path = r'Path to your data\ECG200_train.csv'  
-    test_data_path = r'Path to your data\ECG200_test.csv'  
+    # Load the data
+    train_data_path =r'Path to your data\ECG200_train.csv'  
+    test_data_path = r'Path to your data\ECG200_train.csv' 
     train_data = pd.read_csv(train_data_path,header=None)
     test_data = pd.read_csv(test_data_path,header=None)
 
-    # Seperate the data and the label, assume label is in the last column
+    # Seperate data and label, assume label is in the laast column
     X_train = train_data.iloc[:, :-1].values
     y_train = train_data.iloc[:, -1].values
 
     X = test_data.iloc[:, :-1].values
     y = test_data.iloc[:, -1].values
 
-    # 50% test, 50% validation
+    # Split into train and test sets if necessary
+    # X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.7, random_state=41,stratify=y)
+
+    # Split into test and validation sets
     X_validate, X_test, y_validate, y_test = train_test_split(X, y, test_size=0.5, random_state=41,stratify=y)
 
-    X_train = np.expand_dims(X_train, axis=1)  
+    # Standardize
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_validate = scaler.transform(X_validate)
+    X_test = scaler.transform(X_test)
+
+    X_train = np.expand_dims(X_train, axis=1)
     X_validate = np.expand_dims(X_validate, axis=1)  
     X_test = np.expand_dims(X_test, axis=1)  
 
+    # Transfer into Pytorch tensors
     X_train, y_train = torch.tensor(X_train, dtype=torch.float32), torch.tensor(y_train, dtype=torch.long)
     X_validate, y_validate = torch.tensor(X_validate, dtype=torch.float32), torch.tensor(y_validate, dtype=torch.long)
     X_test, y_test = torch.tensor(X_test, dtype=torch.float32), torch.tensor(y_test, dtype=torch.long)
 
+    # Create TensorDataset
     train_dataset = TensorDataset(X_train, y_train)
     valid_dataset = TensorDataset(X_validate, y_validate)
     test_dataset = TensorDataset(X_test, y_test)
+
+    # # Load the data
+    # Data_path=r'E:\NUS2\Intern\learn2learn-master\Test_Data\feature_time_48k_2048_load_1.csv'
+    # Data=pd.read_csv(Data_path)
+
+    # # Seperate data and label, assume label is in the laast column
+    # X = Data.iloc[:, :-1].values
+    # y = Data.iloc[:, -1].values
+    # scaler = StandardScaler()
+    # X = scaler.fit_transform(X)
+
+    # # 1550 train, 375 test, 375 validation
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=750, random_state=41,stratify=y)
+    # X_test, X_validate, y_test, y_validate = train_test_split(X_test, y_test, test_size=0.5, random_state=41,stratify=y_test)
+
+    # # Add channel
+    # X_train = np.expand_dims(X_train, axis=1)  
+    # X_validate = np.expand_dims(X_validate, axis=1)  
+    # X_test = np.expand_dims(X_test, axis=1)  
+
+    # # To PyTorch tensor
+    # X_train = torch.tensor(X_train, dtype=torch.float32)
+    # X_validate = torch.tensor(X_validate, dtype=torch.float32)
+    # X_test = torch.tensor(X_test, dtype=torch.float32)
+
+    # label_encoder = LabelEncoder()
+    # y_train = label_encoder.fit_transform(y_train)
+    # y_train = torch.tensor(y_train, dtype=torch.int64)
+   
+    # y_test = label_encoder.fit_transform(y_test)
+    # y_test = torch.tensor(y_test, dtype=torch.int64)
+  
+    # y_validate = label_encoder.fit_transform(y_validate)
+    # y_validate = torch.tensor(y_validate, dtype=torch.int64)
+
+    # # To TensorDataset
+    # train_dataset = TensorDataset(X_train, y_train)
+    # valid_dataset = TensorDataset(X_validate, y_validate)
+    # test_dataset = TensorDataset(X_test, y_test)
+
     
     train_dataset = l2l.data.MetaDataset(train_dataset)
     train_transforms = [
